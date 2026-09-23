@@ -20,6 +20,7 @@ import sys
 import time
 import json
 import urllib.request
+import urllib.error
 import urllib.parse
 from datetime import datetime, timezone
 
@@ -31,15 +32,24 @@ QUEUE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "queue.jso
 def _post(url, params):
     data = urllib.parse.urlencode(params).encode()
     req = urllib.request.Request(url, data=data, method="POST")
-    with urllib.request.urlopen(req) as resp:
-        return json.loads(resp.read().decode())
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f"HTTPエラー詳細: {body}")
+        raise
 
 
 def _get(url, params):
     qs = urllib.parse.urlencode(params)
-    with urllib.request.urlopen(f"{url}?{qs}") as resp:
-        return json.loads(resp.read().decode())
-
+    try:
+        with urllib.request.urlopen(f"{url}?{qs}") as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f"HTTPエラー詳細: {body}")
+        raise
 
 def create_container(ig_user_id, access_token, image_url, caption):
     url = f"{GRAPH_BASE}/{ig_user_id}/media"
