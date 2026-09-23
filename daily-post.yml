@@ -1,0 +1,37 @@
+name: Daily Instagram Post
+
+on:
+  schedule:
+    # 毎日 21:00 JST (= 12:00 UTC) に実行
+    - cron: "0 12 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run daily post script
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          PAGES_BASE_URL: https://osa0508.github.io/dr-teachers-auto-post
+        run: python scripts/post_daily.py
+
+      - name: Commit updated queue.json
+        run: |
+          git config user.name "dr-teachers-auto-post bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add content/queue.json
+          git diff --cached --quiet || git commit -m "chore: mark post as published [skip ci]"
+          git push
