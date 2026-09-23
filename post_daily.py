@@ -24,7 +24,7 @@ import urllib.parse
 from datetime import datetime, timezone
 
 GRAPH_API_VERSION = "v21.0"
-GRAPH_BASE = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
+GRAPH_BASE = f"https://graph.instagram.com/{GRAPH_API_VERSION}"
 QUEUE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "queue.json")
 
 
