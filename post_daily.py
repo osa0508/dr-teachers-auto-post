@@ -1,5 +1,5 @@
 """
-毎日1件、content/queue.json の中からまだ投稿していない記事を選んで
+毎日1件、queue.json の中からまだ投稿していない記事を選んで
 Instagram（@dr._teachers）に自動投稿するスクリプト。
 
 前提:
@@ -10,7 +10,7 @@ Instagram（@dr._teachers）に自動投稿するスクリプト。
   （例: https://osa0508.github.io/dr-teachers-auto-post）
 
 流れ:
-  1. content/queue.json を読み込み、posted=false の最初の記事を選ぶ
+  1. queue.json を読み込み、posted=false の最初の記事を選ぶ
   2. Instagram Graph API でメディアコンテナを作成 → 完了待ち → 公開
   3. 成功したら queue.json の該当記事を posted=true, posted_at=<日時> に更新して保存
      （GitHub Actions 側でこのファイルをコミット・プッシュする）
@@ -20,7 +20,6 @@ import sys
 import time
 import json
 import urllib.request
-import urllib.error
 import urllib.parse
 from datetime import datetime, timezone
 
@@ -50,6 +49,7 @@ def _get(url, params):
         body = e.read().decode()
         print(f"HTTPエラー詳細: {body}")
         raise
+
 
 def create_container(ig_user_id, access_token, image_url, caption):
     url = f"{GRAPH_BASE}/{ig_user_id}/media"
@@ -85,9 +85,9 @@ def publish(ig_user_id, access_token, container_id):
 
 
 def main():
-    ig_user_id = os.environ.get("IG_USER_ID")
-    access_token = os.environ.get("IG_ACCESS_TOKEN")
-    pages_base_url = os.environ.get("PAGES_BASE_URL", "").rstrip("/")
+    ig_user_id = (os.environ.get("IG_USER_ID") or "").strip()
+    access_token = (os.environ.get("IG_ACCESS_TOKEN") or "").strip()
+    pages_base_url = (os.environ.get("PAGES_BASE_URL") or "").strip().rstrip("/")
 
     if not ig_user_id or not access_token:
         print("IG_USER_ID と IG_ACCESS_TOKEN を環境変数にセットしてください", file=sys.stderr)
@@ -95,6 +95,9 @@ def main():
     if not pages_base_url:
         print("PAGES_BASE_URL を環境変数にセットしてください（例: https://osa0508.github.io/dr-teachers-auto-post）", file=sys.stderr)
         sys.exit(1)
+
+    print(f"DEBUG: IG_USER_ID='{ig_user_id}' (len={len(ig_user_id)})")
+    print(f"DEBUG: access_token length={len(access_token)}, starts='{access_token[:6]}', ends='{access_token[-6:]}'")
 
     with open(QUEUE_PATH, "r", encoding="utf-8") as f:
         queue = json.load(f)
@@ -106,7 +109,7 @@ def main():
             break
 
     if next_post is None:
-        print("投稿可能な記事がキューにありません。content/queue.json に新しい記事を追加してください。")
+        print("投稿可能な記事がキューにありません。queue.json に新しい記事を追加してください。")
         sys.exit(0)
 
     image_url = f"{pages_base_url}/{next_post['image']}"
