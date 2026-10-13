@@ -84,6 +84,77 @@ def publish(ig_user_id, access_token, container_id):
     return result["id"]
 
 
+THREADS_BASE = "https://graph.threads.net/v1.0"
+THREADS_TEXT_LIMIT = 500
+
+
+def build_threads_text(caption):
+    """Instagram用キャプションをThreads用に整形する。
+    - ハッシュタグだけの行を除去（Threadsはトピックタグ1つが基本）
+    - 先頭のハッシュタグ1つだけをトピックタグとして末尾に付ける
+    - 500文字を超える場合は切り詰める
+    """
+    lines = caption.split("\n")
+    body_lines = []
+    first_tag = None
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            tags = [t for t in stripped.split() if t.startswith("#")]
+            if tags and first_tag is None:
+                first_tag = tags[0]
+            continue
+        body_lines.append(line)
+    text = "\n".join(body_lines).strip()
+    suffix = f"\n\n{first_tag}" if first_tag else ""
+    max_body = THREADS_TEXT_LIMIT - len(suffix)
+    if len(text) > max_body:
+        text = text[: max_body - 1].rstrip() + "…"
+    return text + suffix
+
+
+def post_to_threads(threads_user_id, threads_token, image_url, caption):
+    """Threadsに画像つきで投稿する。成功したら投稿IDを返す。"""
+    text = build_threads_text(caption)
+    container = _post(
+        f"{THREADS_BASE}/{threads_user_id}/threads",
+        {
+            "media_type": "IMAGE",
+            "image_url": image_url,
+            "text": text,
+            "access_token": threads_token,
+        },
+    )
+    if "id" not in container:
+        raise RuntimeError(f"Threadsコンテナ作成に失敗しました: {container}")
+    container_id = container["id"]
+    print(f"Threadsコンテナ作成完了: {container_id}")
+
+    # 画像の処理完了を待つ
+    waited = 0
+    while waited < 120:
+        status = _get(
+            f"{THREADS_BASE}/{container_id}",
+            {"fields": "status,error_message", "access_token": threads_token},
+        )
+        if status.get("status") == "FINISHED":
+            break
+        if status.get("status") == "ERROR":
+            raise RuntimeError(f"Threadsメディア処理でエラー: {status}")
+        time.sleep(5)
+        waited += 5
+    else:
+        raise TimeoutError("Threadsメディア処理がタイムアウトしました")
+
+    published = _post(
+        f"{THREADS_BASE}/{threads_user_id}/threads_publish",
+        {"creation_id": container_id, "access_token": threads_token},
+    )
+    if "id" not in published:
+        raise RuntimeError(f"Threads公開に失敗しました: {published}")
+    return published["id"]
+
+
 def main():
     ig_user_id = (os.environ.get("IG_USER_ID") or "").strip()
     access_token = (os.environ.get("IG_ACCESS_TOKEN") or "").strip()
@@ -127,6 +198,19 @@ def main():
 
     next_post["posted"] = True
     next_post["posted_at"] = datetime.now(timezone.utc).isoformat()
+
+    # Threadsにも同じ内容を投稿（失敗してもInstagram側の記録には影響させない）
+    threads_user_id = (os.environ.get("THREADS_USER_ID") or "").strip()
+    threads_token = (os.environ.get("THREADS_ACCESS_TOKEN") or "").strip()
+    if threads_user_id and threads_token:
+        try:
+            threads_id = post_to_threads(threads_user_id, threads_token, image_url, caption)
+            next_post["threads_posted_at"] = datetime.now(timezone.utc).isoformat()
+            print(f"Threads投稿完了: id={threads_id}")
+        except Exception as e:  # noqa: BLE001
+            print(f"WARNING: Threads投稿に失敗しました（Instagramは投稿済み）: {e}", file=sys.stderr)
+    else:
+        print("THREADS_USER_ID / THREADS_ACCESS_TOKEN が未設定のため、Threads投稿はスキップします")
 
     with open(QUEUE_PATH, "w", encoding="utf-8") as f:
         json.dump(queue, f, ensure_ascii=False, indent=2)

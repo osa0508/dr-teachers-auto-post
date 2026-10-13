@@ -28,7 +28,29 @@ def refresh_long_lived_token(access_token):
     return _get(url, params)
 
 
+def refresh_threads_token():
+    """THREADS_ACCESS_TOKEN が設定されている場合のみ、Threads長期トークンも更新する。"""
+    token = os.environ.get("THREADS_ACCESS_TOKEN")
+    if not token:
+        return
+    try:
+        result = _get(
+            "https://graph.threads.net/refresh_access_token",
+            {"grant_type": "th_refresh_token", "access_token": token},
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"Threadsトークン更新に失敗しました: {e}", file=sys.stderr)
+        return
+    if "access_token" not in result:
+        print(f"Threadsトークン更新に失敗しました: {result}", file=sys.stderr)
+        return
+    print("=== 新しいThreadsアクセストークン（SecretsのTHREADS_ACCESS_TOKENに上書き保存してください） ===")
+    print(result["access_token"])
+    print(f"有効期限（秒）: {result.get('expires_in')}")
+
+
 if __name__ == "__main__":
+    refresh_threads_token()
     access_token = os.environ.get("IG_ACCESS_TOKEN")
     if not access_token:
         print("IG_ACCESS_TOKEN を環境変数にセットしてください", file=sys.stderr)

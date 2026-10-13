@@ -18,4 +18,5 @@ jobs:
       - name: Refresh long-lived token
         env:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
         run: python refresh_token.py
